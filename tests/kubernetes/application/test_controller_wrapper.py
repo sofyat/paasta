@@ -167,16 +167,21 @@ def test_sync_horizontal_pod_autoscaler_no_autoscaling():
     # Do nothing
     config_dict = {"instances": 1}
     app = setup_app(config_dict, False)
-    app.sync_horizontal_pod_autoscaler(kube_client=mock_client)
-    assert (
-        mock_client.autoscaling.create_namespaced_horizontal_pod_autoscaler.call_count
-        == 0
-    )
-    assert (
-        mock_client.autoscaling.replace_namespaced_horizontal_pod_autoscaler.call_count
-        == 0
-    )
-    assert app.delete_horizontal_pod_autoscaler.call_count == 0
+    with mock.patch(
+            "paasta_tools.kubernetes.application.controller_wrappers.autoscaling_is_paused",
+            autospec=True,
+    ) as mock_autoscaling_is_paused:
+        mock_autoscaling_is_paused.return_value = True
+        app.sync_horizontal_pod_autoscaler(kube_client=mock_client)
+        assert (
+            mock_client.autoscaling.create_namespaced_horizontal_pod_autoscaler.call_count
+            == 0
+        )
+        assert (
+            mock_client.autoscaling.replace_namespaced_horizontal_pod_autoscaler.call_count
+            == 0
+        )
+        assert app.delete_horizontal_pod_autoscaler.call_count == 0
 
 
 def test_sync_horizontal_pod_autoscaler_delete_hpa_when_no_autoscaling():
@@ -184,16 +189,21 @@ def test_sync_horizontal_pod_autoscaler_delete_hpa_when_no_autoscaling():
     # old HPA got removed so delete
     config_dict = {"instances": 1}
     app = setup_app(config_dict, True)
-    app.sync_horizontal_pod_autoscaler(kube_client=mock_client)
-    assert (
-        mock_client.autoscaling.create_namespaced_horizontal_pod_autoscaler.call_count
-        == 0
-    )
-    assert (
-        mock_client.autoscaling.replace_namespaced_horizontal_pod_autoscaler.call_count
-        == 0
-    )
-    assert app.delete_horizontal_pod_autoscaler.call_count == 1
+    with mock.patch(
+            "paasta_tools.kubernetes.application.controller_wrappers.autoscaling_is_paused",
+            autospec=True,
+    ) as mock_autoscaling_is_paused:
+        mock_autoscaling_is_paused.return_value = False
+        app.sync_horizontal_pod_autoscaler(kube_client=mock_client)
+        assert (
+            mock_client.autoscaling.create_namespaced_horizontal_pod_autoscaler.call_count
+            == 0
+        )
+        assert (
+            mock_client.autoscaling.replace_namespaced_horizontal_pod_autoscaler.call_count
+            == 0
+        )
+        assert app.delete_horizontal_pod_autoscaler.call_count == 1
 
 
 def test_sync_horizontal_pod_autoscaler_create_hpa():
@@ -201,19 +211,25 @@ def test_sync_horizontal_pod_autoscaler_create_hpa():
     # Create
     config_dict = {"max_instances": 3}
     app = setup_app(config_dict, False)
-    app.sync_horizontal_pod_autoscaler(kube_client=mock_client)
-    assert (
-        mock_client.autoscaling.replace_namespaced_horizontal_pod_autoscaler.call_count
-        == 0
-    )
-    assert app.delete_horizontal_pod_autoscaler.call_count == 0
-    mock_client.autoscaling.create_namespaced_horizontal_pod_autoscaler.assert_called_once_with(
-        namespace="faasta",
-        body=app.soa_config.get_autoscaling_metric_spec(
-            "fake_name", "cluster", "faasta"
-        ),
-        pretty=True,
-    )
+    with mock.patch(
+            "paasta_tools.kubernetes.application.controller_wrappers.autoscaling_is_paused",
+            autospec=True,
+    ) as mock_autoscaling_is_paused:
+        mock_autoscaling_is_paused.return_value = False
+        app.sync_horizontal_pod_autoscaler(kube_client=mock_client)
+
+        assert (
+            mock_client.autoscaling.replace_namespaced_horizontal_pod_autoscaler.call_count
+            == 0
+        )
+        assert app.delete_horizontal_pod_autoscaler.call_count == 0
+        mock_client.autoscaling.create_namespaced_horizontal_pod_autoscaler.assert_called_once_with(
+            namespace="faasta",
+            body=app.soa_config.get_autoscaling_metric_spec(
+                "fake_name", "cluster", "faasta"
+            ),
+            pretty=True,
+        )
 
 
 def test_sync_horizontal_pod_autoscaler_update_hpa():
@@ -221,20 +237,25 @@ def test_sync_horizontal_pod_autoscaler_update_hpa():
     # Update
     config_dict = {"max_instances": 3}
     app = setup_app(config_dict, True)
-    app.sync_horizontal_pod_autoscaler(kube_client=mock_client)
-    assert (
-        mock_client.autoscaling.create_namespaced_horizontal_pod_autoscaler.call_count
-        == 0
-    )
-    assert app.delete_horizontal_pod_autoscaler.call_count == 0
-    mock_client.autoscaling.replace_namespaced_horizontal_pod_autoscaler.assert_called_once_with(
-        namespace="faasta",
-        name="fake_name",
-        body=app.soa_config.get_autoscaling_metric_spec(
-            "fake_name", "cluster", "faasta"
-        ),
-        pretty=True,
-    )
+    with mock.patch(
+            "paasta_tools.kubernetes.application.controller_wrappers.autoscaling_is_paused",
+            autospec=True,
+    ) as mock_autoscaling_is_paused:
+        mock_autoscaling_is_paused.return_value = False
+        app.sync_horizontal_pod_autoscaler(kube_client=mock_client)
+        assert (
+            mock_client.autoscaling.create_namespaced_horizontal_pod_autoscaler.call_count
+            == 0
+        )
+        assert app.delete_horizontal_pod_autoscaler.call_count == 0
+        mock_client.autoscaling.replace_namespaced_horizontal_pod_autoscaler.assert_called_once_with(
+            namespace="faasta",
+            name="fake_name",
+            body=app.soa_config.get_autoscaling_metric_spec(
+                "fake_name", "cluster", "faasta"
+            ),
+            pretty=True,
+        )
 
 
 def test_sync_horizontal_pod_autoscaler_bespoke_autoscaler():
@@ -243,13 +264,18 @@ def test_sync_horizontal_pod_autoscaler_bespoke_autoscaler():
     # Do nothing
     config_dict = {"max_instances": 3, "autoscaling": {"decision_policy": "bespoke"}}
     app = setup_app(config_dict, False)
-    app.sync_horizontal_pod_autoscaler(kube_client=mock_client)
-    assert (
-        mock_client.autoscaling.create_namespaced_horizontal_pod_autoscaler.call_count
-        == 0
-    )
-    assert (
-        mock_client.autoscaling.replace_namespaced_horizontal_pod_autoscaler.call_count
-        == 0
-    )
-    assert app.delete_horizontal_pod_autoscaler.call_count == 0
+    with mock.patch(
+            "paasta_tools.kubernetes.application.controller_wrappers.autoscaling_is_paused",
+            autospec=True,
+    ) as mock_autoscaling_is_paused:
+        mock_autoscaling_is_paused.return_value = False
+        app.sync_horizontal_pod_autoscaler(kube_client=mock_client)
+        assert (
+            mock_client.autoscaling.create_namespaced_horizontal_pod_autoscaler.call_count
+            == 0
+        )
+        assert (
+            mock_client.autoscaling.replace_namespaced_horizontal_pod_autoscaler.call_count
+            == 0
+        )
+        assert app.delete_horizontal_pod_autoscaler.call_count == 0

@@ -12,6 +12,7 @@ from kubernetes.client import V1Deployment
 from kubernetes.client import V1StatefulSet
 from kubernetes.client.rest import ApiException
 
+from paasta_tools.autoscaling.autoscaling_service_lib import autoscaling_is_paused
 from paasta_tools.kubernetes_tools import create_deployment
 from paasta_tools.kubernetes_tools import create_pod_disruption_budget
 from paasta_tools.kubernetes_tools import create_stateful_set
@@ -281,7 +282,7 @@ class DeploymentWrapper(Application):
         )
         hpa_exists = self.exists_hpa(kube_client)
         # NO autoscaling
-        if not self.should_have_hpa():
+        if not self.should_have_hpa() or autoscaling_is_paused():
             # Remove HPA if autoscaling is disabled
             if hpa_exists:
                 self.delete_horizontal_pod_autoscaler(kube_client)
