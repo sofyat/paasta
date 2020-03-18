@@ -1606,13 +1606,17 @@ def create_pod_disruption_budget(
 def set_instances_for_kubernetes_service(
     kube_client: KubeClient, service_config: KubernetesDeploymentConfig, instance_count: int
 ) -> None:
-    deployment_name = service_config.get_sanitised_deployment_name()
-    scale_deployment_body = service_config.format_kubernetes_app()
-    scale_deployment_body.spec.replicas = instance_count
-
-    kube_client.deployments.patch_namespaced_deployment_scale(name=deployment_name,
-                                                              namespace="paasta",
-                                                              body=scale_deployment_body)
+    name = service_config.get_sanitised_deployment_name()
+    formatted_application = service_config.format_kubernetes_app()
+    formatted_application.spec.replicas = instance_count
+    if service_config.get_persistent_volumes():
+        kube_client.deployments.patch_namespaced_stateful_set_scale(name=name,
+                                                                    namespace="paasta",
+                                                                    body=formatted_application)
+    else:
+        kube_client.deployments.patch_namespaced_deployment_scale(name=name,
+                                                                  namespace="paasta",
+                                                                  body=formatted_application)
 
 
 def list_all_deployments(kube_client: KubeClient) -> Sequence[KubeDeployment]:
